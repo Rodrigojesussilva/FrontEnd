@@ -1,9 +1,10 @@
 import * as React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Provider as PaperProvider, DataTable, Modal, TextInput, Portal, IconButton, Button, Text } from 'react-native-paper';
 import { SafeAreaView, StyleSheet, ScrollView, Image, View, Alert } from 'react-native';
 import axios from 'axios';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useLayoutEffect } from 'react';
 import { Picker } from '@react-native-picker/picker';
 
 const API_URL = 'http://10.0.2.2:3000'; // URL do backend
@@ -14,6 +15,7 @@ const horarios = [
   '11:00:00',
   '12:00:00',
 ];
+
 type Agendamento = {
   id?: number;
   dataAtendimento: string;
@@ -28,6 +30,7 @@ type Agendamento = {
   fk_usuario_id: number;
   fk_servico_id: number;
 };
+
 type AgendamentoInsercao = {
   dataAtendimento: string;
   dthoraAgendamento: string;
@@ -35,11 +38,13 @@ type AgendamentoInsercao = {
   fk_usuario_id: number;
   fk_servico_id: number;
 };
+
 type Servico = {
   id: number;
   tiposervico: string;
   valor: number;
 };
+
 type Usuario = {
   id: number;
   nome: string;
@@ -89,6 +94,9 @@ const GerenciamentoAgendamento = () => {
       agendamento.valor?.toString().includes(query) // Converte valor para string para comparação
     );
   });
+  const [userType, setUserType] = useState<string | null>(null); // Estado do tipo de usuário
+  const [loading, setLoading] = useState(true); // Estado para controle de carregamento
+
 
   useEffect(() => {
     const now = new Date();
@@ -100,7 +108,23 @@ const GerenciamentoAgendamento = () => {
 
   const fetchAgendamentos = async () => {
     try {
-      const response = await axios.get(`${API_URL}/agendamentos_vw`);
+      // Recupera o e-mail armazenado no AsyncStorage
+      const userEmailStored = await AsyncStorage.getItem('userEmail');
+
+      // Verifica se o e-mail foi recuperado corretamente
+      if (!userEmailStored) {
+        console.error('E-mail não encontrado no AsyncStorage.');
+        return;
+      }
+
+      // Faz a requisição para o novo endpoint com o e-mail na query string
+      const response = await axios.get(`${API_URL}/agendamentosUser`, {
+        params: {
+          email: userEmailStored  // Passando o e-mail como parâmetro na URL
+        }
+      });
+
+      // Mapeia os dados da resposta
       const agendamentosData = response.data.map((item: any) => ({
         id: item.agendamento_id,
         dataAtendimento: item.dataatendimento,
@@ -113,7 +137,10 @@ const GerenciamentoAgendamento = () => {
         usuarioEmail: item.usuario_email,
         valor: item.valor,
       }));
+
+      // Atualiza o estado com os dados dos agendamentos
       setAgendamentos(agendamentosData);
+
     } catch (error: unknown) {
       if (error instanceof Error) {
         console.error('Erro ao buscar agendamentos:', error.message);
@@ -163,7 +190,7 @@ const GerenciamentoAgendamento = () => {
   const addAgendamento = async () => {
     console.log('Novo Agendamento:', newAgendamento);
 
-    if (!newAgendamento.dataAtendimento || !newAgendamento.horario || newAgendamento.fk_usuario_id <= 0 || newAgendamento.fk_servico_id <= 0) {
+    if (!newAgendamento.dataAtendimento || !newAgendamento.horario || newAgendamento.fk_servico_id <= 0) {
       Alert.alert(
         "Campos Obrigatórios",
         "Por favor, preencha todos os campos obrigatórios: data de atendimento, horário, usuário e serviço.",
@@ -212,11 +239,28 @@ const GerenciamentoAgendamento = () => {
     const [day, month, year] = newAgendamento.dataAtendimento.split('/');
     const formattedDataAtendimento = `${year}-${month}-${day}`;
 
+    const userId = await AsyncStorage.getItem('userId');
+
+    // Verifique se o userId não é null e converta para número
+    if (userId === null) {
+      console.error('userId não encontrado no AsyncStorage');
+      return;  // Ou trate o erro de forma adequada
+    }
+
+    // Converta o userId para número
+    const userIdNumber = Number(userId);
+
+    if (isNaN(userIdNumber)) {
+      console.error('userId não é um número válido');
+      return;  // Ou trate o erro de forma adequada
+    }
+
+    // Agora, crie o objeto novoAgendamento com o userId convertido
     const novoAgendamento: AgendamentoInsercao = {
       dataAtendimento: formattedDataAtendimento,
       dthoraAgendamento: new Date().toISOString(),
       horario: newAgendamento.horario,
-      fk_usuario_id: newAgendamento.fk_usuario_id,
+      fk_usuario_id: userIdNumber,  // Agora passa o userId convertido para número
       fk_servico_id: newAgendamento.fk_servico_id,
     };
 
@@ -252,7 +296,7 @@ const GerenciamentoAgendamento = () => {
     }
 
     // Verifica se os campos obrigatórios estão preenchidos
-    if (!selectedDataAtendimento || !selectedHorarioEditar || !selectedUsuario || !selectedServico) {
+    if (!selectedDataAtendimento || !selectedHorarioEditar || !selectedServico) {
       Alert.alert(
         "Campos Obrigatórios",
         "Por favor, preencha todos os campos obrigatórios: data de atendimento, horário, usuário e serviço.",
@@ -297,28 +341,53 @@ const GerenciamentoAgendamento = () => {
 
   const updateAgendamento = async () => {
     if (currentAgendamento?.id) {
-      console.log('Dados a serem enviados:', currentAgendamento); // Adicione este log para verificar os dados
+      console.log('Dados a serem enviados:', currentAgendamento); // Adiciona o log para verificar os dados
 
+      // Recupera o userId do AsyncStorage
+      const userId = await AsyncStorage.getItem('userId');
+
+      // Verifica se o userId foi encontrado e converte para número
+      if (!userId) {
+        console.error('userId não encontrado no AsyncStorage');
+        Alert.alert('Erro', 'userId não encontrado. Faça login novamente.');
+        return; // Impede a atualização se o userId não for encontrado
+      }
+
+      const userIdNumber = Number(userId);
+
+      if (isNaN(userIdNumber)) {
+        console.error('userId não é um número válido');
+        Alert.alert('Erro', 'O userId é inválido. Tente novamente.');
+        return; // Impede a atualização se o userId for inválido
+      }
+
+      // Agora, cria o objeto com os dados do agendamento atualizado
       const agendamentoAtualizado = {
         dataatendimento: currentAgendamento.dataAtendimento, // Certifique-se de que isso está no formato correto
         dthoraAgendamento: currentAgendamento.dthoraAgendamento,
         horario: currentAgendamento.horario,
-        fk_usuario_id: currentAgendamento.fk_usuario_id,
+        fk_usuario_id: userIdNumber, // Aqui inserimos o userId recuperado
         fk_servico_id: currentAgendamento.fk_servico_id,
       };
 
       try {
+        // Envia a requisição de atualização para o backend
         const response = await axios.put(`${API_URL}/agendamento/atualizar/${currentAgendamento.id}`, agendamentoAtualizado);
-        console.log('Resposta do servidor:', response.data); // Verifique a resposta do servidor
-        setCurrentAgendamento(null); // Limpa o estado após a atualização
-        hideModal('editAgendamento'); // Fecha o modal
+        console.log('Resposta do servidor:', response.data); // Verifica a resposta do servidor
+
+        // Limpa o estado e fecha o modal após a atualização
+        setCurrentAgendamento(null);
+        hideModal('editAgendamento');
         fetchAgendamentos(); // Atualiza a lista de agendamentos
+
+        // Exibe um alerta de sucesso
         Alert.alert(
           "Agendamento Atualizado",
           "O agendamento foi atualizado com sucesso!",
           [{ text: "OK" }]
         );
       } catch (error) {
+        // Trata o erro
         if (error instanceof Error) {
           console.error('Erro ao atualizar agendamento:', error.message);
           Alert.alert("Erro", "Não foi possível atualizar o agendamento. Tente novamente.");
@@ -384,14 +453,23 @@ const GerenciamentoAgendamento = () => {
   };
 
   useEffect(() => {
-    fetchAgendamentos();
-    fetchServicos();
-    fetchUsuarios(); // Chama a função para buscar usuários
+    const fetchData = async () => {
+      // Certifique-se de que o userType está disponível antes de chamar fetchAgendamentos
+      const storedUserType = await AsyncStorage.getItem('userType');
+      const userTypeNumber = storedUserType ? Number(storedUserType) : null; // Converte para number ou null
+
+      fetchAgendamentos(); // Passa o userType como argumento
+      fetchServicos();
+      fetchUsuarios(); // Chama a função para buscar usuários
+    };
+
+    fetchData();
   }, []);
 
   return (
     <PaperProvider>
       <SafeAreaView style={styles.container}>
+
         <Image source={require('../assets/images/Elysium.png')} style={styles.image} />
         {/* Campo de pesquisa */}
         <Button
@@ -405,6 +483,7 @@ const GerenciamentoAgendamento = () => {
         >
           Adicionar Agendamento
         </Button>
+
         <TextInput
           label="Pesquisar"
           mode="outlined"
@@ -540,34 +619,6 @@ const GerenciamentoAgendamento = () => {
                 </Picker>
               </View>
 
-              <View style={{
-                height: 53,
-                borderWidth: 1,
-                borderColor: '#dc8051', // Cor da borda
-                borderRadius: 5, // Bordas arredondadas
-                overflow: 'hidden', // Garante que o conteúdo do Picker não ultrapasse os limites do container
-                marginBottom: 16, // Margem inferior (opcional)
-              }}>
-                <Picker
-                  selectedValue={selectedUsuario}
-                  onValueChange={(itemValue) => {
-                    setSelectedUsuario(itemValue);
-                    setNewAgendamento(prev => ({ ...prev, fk_usuario_id: Number(itemValue) }));
-                  }}
-                  style={{
-                    height: '100%', // Ocupa toda a altura do contêiner
-                    width: '100%',  // Ocupa toda a largura do contêiner
-                  }}
-                >
-                  <Picker.Item label="Selecione um Usuário" value="" />
-                  {usuarios.map((usuario) => (
-                    <Picker.Item key={usuario.id} label={usuario.nome} value={usuario.id} />
-                  ))}
-                </Picker>
-              </View>
-
-
-
             </View>
             <View style={styles.modalFooter}>
               <Button
@@ -653,36 +704,7 @@ const GerenciamentoAgendamento = () => {
                   ))}
                 </Picker>
               </View>
-
-
-              {/* Selecionar novo usuário */}
-              <View style={{
-                height: 53,
-                borderWidth: 1,
-                borderColor: '#dc8051', // Cor da borda
-                borderRadius: 5, // Bordas arredondadas
-                overflow: 'hidden', // Garante que o conteúdo do Picker não ultrapasse os limites do container
-                marginBottom: 16, // Margem inferior (opcional)
-              }}>
-                <Picker
-                  selectedValue={selectedUsuario}
-                  onValueChange={(itemValue) => {
-                    setSelectedUsuario(itemValue);
-                    setCurrentAgendamento(prev => prev ? { ...prev, fk_usuario_id: Number(itemValue) } : null);
-                  }}
-                  style={{
-                    height: '100%', // Ocupa toda a altura do contêiner
-                    width: '100%',  // Ocupa toda a largura do contêiner
-                  }}
-                >
-                  <Picker.Item label="Selecione um Usuário" value="" />
-                  {usuarios.map((usuario) => (
-                    <Picker.Item key={usuario.id} label={usuario.nome} value={String(usuario.id)} />
-                  ))}
-                </Picker>
-              </View>
-
-
+            
               {/* Selecionar novo serviço */}
               <View style={{
                 height: 53,

@@ -74,10 +74,7 @@ const TestimonialScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.heading}>
-        <Text style={styles.headingText}>Depoimentos</Text>
-      </View>
-
+      
       <ScrollView contentContainerStyle={styles.testimonialList}>
         {testimonialsData.map((item, index) => (
           <View key={index} style={styles.testimonialItem}>

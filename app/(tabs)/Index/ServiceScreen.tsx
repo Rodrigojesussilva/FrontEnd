@@ -13,9 +13,7 @@ const ServicesScreen = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.heading}>
-        <Text style={styles.title}>
-          Nossos <Text style={styles.highlight}>serviços</Text>
-        </Text>
+        
         <TouchableOpacity style={styles.button}>
           <Text style={styles.buttonText}>Agendar</Text>
         </TouchableOpacity>

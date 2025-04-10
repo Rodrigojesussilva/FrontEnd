@@ -38,10 +38,7 @@ const Portfolio = () => {
       <FlatList
         ListHeaderComponent={
           <>
-            <View style={styles.heading}>
-              <Text style={styles.headingText}>
-                Meu <Text style={styles.spanText}>portfólio</Text>
-              </Text>
+            <View style={styles.heading}>              
             </View>
             <View style={styles.filters}>
               <TouchableOpacity style={[styles.filterButton, activeFilter === 'all' && styles.activeFilter]} onPress={() => handleFilterChange('all')}>

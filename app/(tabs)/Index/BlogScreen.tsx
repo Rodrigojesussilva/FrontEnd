@@ -80,7 +80,7 @@ const BlogScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Nosso <Text style={styles.highlight}>Blog</Text></Text>
+      
       <FlatList
         data={blogPosts}
         renderItem={renderItem}

@@ -5,7 +5,7 @@ const ContactScreen = () => {
     return (
         <ScrollView style={{ padding: 20, backgroundColor: "#D1B28D" }}>
             <Text style={{ fontSize: 24, fontWeight: "bold", textAlign: "center", marginBottom: 20 }}>
-                Contato <Text style={{ color: "#d63384" }}>Elysium Beauty</Text>
+            <Text style={{ color: "#d63384" }}>Elysium Beauty</Text>
             </Text>
 
             <View style={{ marginBottom: 20 }}>

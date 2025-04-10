@@ -1,87 +1,84 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Image, Alert } from 'react-native';
 import { TextInput, Button, Text, Snackbar } from 'react-native-paper';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-
 
 const API_URL = 'http://10.0.2.2:3000';
 
 // Tipagem correta para evitar erro do TypeScript
 type RootStackParamList = {
   Home: undefined;
-  RegistroUser: undefined
+  Login: undefined;
+  RedefinirSenha: undefined;  // Certifique-se de adicionar a rota Redefinir Senha
 };
 
-export default function LoginScreen() {
+export default function RedefinirSenhaScreen() {
   const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [visibleSnackbar, setVisibleSnackbar] = useState(false);
-
   const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
-  useEffect(() => {
-    const checkUser = async () => {
-      try {
-        const userType = await AsyncStorage.getItem('userType');
-        if (userType) {
-          navigation.replace('Home'); // Redireciona se já estiver logado
-        }
-      } catch (error) {
-        console.error('Erro ao verificar usuário:', error);
-      }
-    };
-    checkUser();
-  }, []);
-
-  const handleLogin = async () => {
-    if (!email || !senha) {
+  const handleRedefinirSenha = async () => {
+    if (!email || !novaSenha || !confirmarSenha) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos!');
+      return;
+    }
+
+    if (novaSenha !== confirmarSenha) {
+      Alert.alert('Erro', 'As senhas não coincidem!');
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_URL}/usuarios/login`, {
+      const response = await axios.put(`${API_URL}/usuarios/redefinir-senha`, {
         email,
-        senha,
+        novaSenha,
+        confirmarSenha,
       });
 
-      const { id, email: userEmail, tipoUsuario } = response.data.usuario;
-
-      await AsyncStorage.setItem('userId', id.toString());
-      await AsyncStorage.setItem('userEmail', userEmail);
-      await AsyncStorage.setItem('userType', tipoUsuario.toString());
-
-      console.log('userId:', await AsyncStorage.getItem('userId'));
-      console.log('userEmail:', await AsyncStorage.getItem('userEmail'));
-      console.log('userType:', await AsyncStorage.getItem('userType'));
-
-      setVisibleSnackbar(true);
-      setTimeout(() => {
-        navigation.reset({ index: 0, routes: [{ name: 'Home' }] }); // Usar reset
-      }, 1000);
-    } catch (error: any) {  // Define 'error' como 'any' para evitar erro de tipagem
-      if (axios.isAxiosError(error) && error.response) {
-        // Se for um erro do Axios com resposta do servidor (400, 401, 404, etc.)
-        Alert.alert('Erro', error.response.data.error || 'E-mail ou senha inválidos!');
-      } else if (error.request) {
-        // Se a requisição foi feita, mas não houve resposta (problema de conexão)
-        Alert.alert('Erro', 'Falha ao conectar ao servidor. Verifique sua conexão.');
-      } else {
-        // Se for um erro desconhecido
-        Alert.alert('Erro', 'Ocorreu um erro inesperado. Tente novamente.');
+      if (response.status === 200) {
+        Alert.alert('Sucesso', 'Senha redefinida com sucesso!', [
+          {
+            text: 'OK',
+            onPress: () => {
+              setTimeout(() => {
+                navigation.reset({ index: 0, routes: [{ name: 'Home' }] }); // Usar reset
+              }, 1000);
+            }
+          }
+        ]);
       }
-    }
-    finally {
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const { status, data } = error.response;
+        let errorMessage = 'Ocorreu um erro inesperado.';
+
+        switch (status) {
+          case 400:
+            errorMessage = 'Email, nova senha e confirmação de senha são obrigatórios.';
+            break;
+          case 404:
+            errorMessage = 'Usuário não encontrado.';
+            break;
+          default:
+            errorMessage = data.error || errorMessage;
+            break;
+        }
+
+        Alert.alert('Erro', errorMessage);
+      } else {
+        Alert.alert('Erro', 'Falha ao conectar ao servidor. Verifique sua conexão.');
+      }
+    } finally {
       setLoading(false);
     }
   };
-
 
   return (
     <View style={styles.container}>
@@ -92,7 +89,7 @@ export default function LoginScreen() {
         <Text style={styles.brand}>Elysium Beauty</Text>
       </View>
 
-      <Text style={styles.title}>Login</Text>
+      <Text style={styles.title}>Redefinir Senha</Text>
 
       <TextInput
         label="E-mail"
@@ -104,36 +101,37 @@ export default function LoginScreen() {
       />
 
       <TextInput
-        label="Senha"
-        value={senha}
-        onChangeText={setSenha}
+        label="Nova Senha"
+        value={novaSenha}
+        onChangeText={setNovaSenha}
+        secureTextEntry
+        style={styles.input}
+      />
+
+      <TextInput
+        label="Confirmar Senha"
+        value={confirmarSenha}
+        onChangeText={setConfirmarSenha}
         secureTextEntry
         style={styles.input}
       />
 
       <Button
         mode="contained"
-        onPress={handleLogin}
+        onPress={handleRedefinirSenha}
         style={styles.button}
         loading={loading}
         disabled={loading}
       >
-        Entrar
+        Redefinir Senha
       </Button>
-
-      <Text
-        style={styles.link}
-        onPress={() => navigation.navigate('RegistroUser')}  // Navega para a tela de Cadastro
-      >
-        Criar uma conta
-      </Text>
 
       <Snackbar
         visible={visibleSnackbar}
         onDismiss={() => setVisibleSnackbar(false)}
         duration={Snackbar.DURATION_SHORT}
       >
-        Login bem-sucedido!
+        Senha redefinida com sucesso!
       </Snackbar>
     </View>
   );
@@ -185,12 +183,4 @@ const styles = StyleSheet.create({
     marginTop: 10,
     backgroundColor: '#A67B5B',
   },
-  link: {
-    marginTop: 15,
-    textAlign: 'center',
-    color: '#A67B5B', // Marrom claro no link
-    fontWeight: 'bold',
-  },
 });
-
-
